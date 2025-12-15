@@ -10,8 +10,22 @@ import type {
   ValidationResult
 } from '@/types';
 
+/**
+ * Detect the base path from the current URL.
+ * Supports deployments at /dancer/, /bfe2/dancer/, or root /
+ */
+function getBasePath(): string {
+  const path = window.location.pathname;
+  // Match paths ending with /dancer or /dancer/
+  const match = path.match(/^(.*\/dancer)\/?/);
+  if (match) {
+    return match[1] + '/';
+  }
+  return '/';
+}
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: getBasePath() + 'api',
   headers: {
     'Content-Type': 'application/json'
   }
@@ -294,7 +308,7 @@ export const importExportApi = {
   },
 
   getExportUrl(workspaceId: string, format: 'csv' | 'tsv' = 'csv'): string {
-    return `/api/workspaces/${workspaceId}/export?format=${format}`;
+    return `${getBasePath()}api/workspaces/${workspaceId}/export?format=${format}`;
   }
 };
 
@@ -332,7 +346,7 @@ export const marvaProfileApi = {
   },
 
   getExportUrl(workspaceId: string): string {
-    return `/api/marva-profile/export/${workspaceId}`;
+    return `${getBasePath()}api/marva-profile/export/${workspaceId}`;
   }
 };
 
@@ -363,7 +377,7 @@ export const startingPointApi = {
   },
 
   getExportUrl(workspaceId: string): string {
-    return `/api/starting-point/export/${workspaceId}`;
+    return `${getBasePath()}api/starting-point/export/${workspaceId}`;
   }
 };
 
