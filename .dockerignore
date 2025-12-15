@@ -1,0 +1,34 @@
+# Dependencies
+node_modules
+*/node_modules
+
+# Build output (will be built in Docker)
+backend/dist
+frontend/dist
+
+# Data directory (will be mounted as volume)
+backend/data
+
+# Development/test files
+**/*.test.ts
+**/vitest.config.ts
+.env
+.env.*
+
+# IDE
+.idea
+.vscode
+**/*.swp
+**/*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Git
+.git
+.gitignore
