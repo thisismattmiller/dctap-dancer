@@ -1,5 +1,7 @@
 # DCTap Dancer
 
+[![Tests](https://github.com/thisismattmiller/dctap-dancer/actions/workflows/test.yml/badge.svg)](https://github.com/thisismattmiller/dctap-dancer/actions/workflows/test.yml)
+
 A metadata application profile editor implementing the [DC TAP (Dublin Core Tabular Application Profile)](https://www.dublincore.org/specifications/dctap/) standard.
 
 ## Features
