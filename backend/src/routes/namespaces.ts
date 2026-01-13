@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { namespaceService, workspaceService } from '../services/database.js';
 import { AppError } from '../middleware/error-handler.js';
+import { checkWorkspaceLocked } from '../middleware/locked-workspace.js';
 import { CreateNamespaceRequest, UpdateNamespaceRequest, ApiResponse } from '../types/dctap.js';
 
 const router = Router({ mergeParams: true });
@@ -33,8 +34,8 @@ router.get('/:prefix', (req: Request, res: Response, next: NextFunction) => {
   res.json(response);
 });
 
-// Create namespace
-router.post('/', (req: Request, res: Response, next: NextFunction) => {
+// Create namespace (blocked for locked workspaces)
+router.post('/', checkWorkspaceLocked, (req: Request, res: Response, next: NextFunction) => {
   const { prefix, namespace } = req.body as CreateNamespaceRequest;
 
   if (!prefix || typeof prefix !== 'string' || prefix.trim().length === 0) {
@@ -56,8 +57,8 @@ router.post('/', (req: Request, res: Response, next: NextFunction) => {
   res.status(201).json(response);
 });
 
-// Update namespace
-router.put('/:prefix', (req: Request, res: Response, next: NextFunction) => {
+// Update namespace (blocked for locked workspaces)
+router.put('/:prefix', checkWorkspaceLocked, (req: Request, res: Response, next: NextFunction) => {
   const { namespace } = req.body as UpdateNamespaceRequest;
 
   if (!namespace || typeof namespace !== 'string' || namespace.trim().length === 0) {
@@ -73,8 +74,8 @@ router.put('/:prefix', (req: Request, res: Response, next: NextFunction) => {
   res.json(response);
 });
 
-// Delete namespace
-router.delete('/:prefix', (req: Request, res: Response, next: NextFunction) => {
+// Delete namespace (blocked for locked workspaces)
+router.delete('/:prefix', checkWorkspaceLocked, (req: Request, res: Response, next: NextFunction) => {
   const deleted = namespaceService.delete(req.params.workspaceId, req.params.prefix);
   if (!deleted) {
     return next(new AppError(404, 'Namespace not found', 'NAMESPACE_NOT_FOUND'));

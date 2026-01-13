@@ -9,7 +9,9 @@
     <div class="toolbar">
       <div class="toolbar-left">
         <span class="shape-id">{{ shapeId }}</span>
+        <span v-if="isLocked" class="locked-indicator" title="This workspace is locked (read-only)">&#128274; Read-only</span>
         <span
+          v-if="!isLocked"
           class="shape-description"
           :class="{ 'no-description': !description }"
           @click="startEditDescription"
@@ -18,15 +20,21 @@
           <span class="description-text">{{ description || 'No description' }}</span>
           <span class="edit-icon">&#9998;</span>
         </span>
+        <span v-else-if="description" class="shape-description-readonly">
+          {{ description }}
+        </span>
         <span v-if="saving" class="save-indicator saving">Saving...</span>
         <span v-else-if="showSavedIndicator" class="save-indicator saved">Saved</span>
         <span v-else-if="hasUnsavedChanges" class="save-indicator unsaved">Unsaved changes</span>
       </div>
       <div class="toolbar-right">
-        <button class="btn btn-icon" @click="undo" :disabled="!canUndo" title="Undo (Ctrl+Z)">
+        <button class="btn btn-icon" @click="openSendToWorkspace" title="Send to other workspace">
+          &#8599;
+        </button>
+        <button v-if="!isLocked" class="btn btn-icon" @click="undo" :disabled="!canUndo" title="Undo (Ctrl+Z)">
           &#8630;
         </button>
-        <button class="btn btn-icon" @click="redo" :disabled="!canRedo" title="Redo (Ctrl+Y)">
+        <button v-if="!isLocked" class="btn btn-icon" @click="redo" :disabled="!canRedo" title="Redo (Ctrl+Y)">
           &#8631;
         </button>
       </div>
@@ -167,13 +175,66 @@
       <button @click="cutSelection">Cut</button>
       <button @click="pasteFromClipboard">Paste</button>
     </div>
+
+    <!-- Send to Workspace Modal -->
+    <div v-if="showSendToWorkspace" class="dialog-overlay" @click.self="closeSendToWorkspace">
+      <div class="dialog send-to-workspace-dialog">
+        <h2>Send to Other Workspace</h2>
+        <p class="dialog-description">
+          Send shape "{{ shapeId }}" to another workspace.
+        </p>
+
+        <div v-if="loadingWorkspaces" class="loading-workspaces">
+          Loading workspaces...
+        </div>
+
+        <div v-else-if="otherWorkspaces.length === 0" class="no-workspaces">
+          No other workspaces available. Create another workspace first.
+        </div>
+
+        <div v-else class="workspace-list">
+          <label
+            v-for="ws in otherWorkspaces"
+            :key="ws.id"
+            class="workspace-option"
+            :class="{ selected: selectedTargetWorkspace === ws.id }"
+          >
+            <input
+              type="radio"
+              :value="ws.id"
+              v-model="selectedTargetWorkspace"
+              @change="checkShapeExists"
+            />
+            <span class="workspace-name">{{ ws.name }}</span>
+          </label>
+        </div>
+
+        <div v-if="shapeExistsInTarget" class="warning-message">
+          Warning: A shape with ID "{{ shapeId }}" already exists in the selected workspace. Sending will overwrite it.
+        </div>
+
+        <div class="dialog-actions">
+          <button type="button" class="btn btn-secondary" @click="closeSendToWorkspace">
+            Cancel
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary"
+            :disabled="!selectedTargetWorkspace || sendingShape"
+            @click="doSendToWorkspace"
+          >
+            {{ sendingShape ? 'Sending...' : 'Send' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script lang="ts">
 import { defineComponent, ref, computed, onMounted, watch, nextTick, PropType } from 'vue';
-import { rowApi, validationApi } from '@/services/api';
-import type { StatementRow, Shape, Namespace, Selection, UndoState, ColumnDef } from '@/types';
+import { rowApi, validationApi, workspaceApi, shapeApi } from '@/services/api';
+import type { StatementRow, Shape, Namespace, Selection, UndoState, ColumnDef, Workspace } from '@/types';
 import { COLUMNS } from '@/types';
 import CellEditor from './CellEditor.vue';
 
@@ -214,6 +275,10 @@ export default defineComponent({
       default: ''
     },
     useLCColumns: {
+      type: Boolean,
+      default: false
+    },
+    isLocked: {
       type: Boolean,
       default: false
     }
@@ -257,6 +322,18 @@ export default defineComponent({
     // Drag and drop for row reordering
     const draggedRowIndex = ref<number | null>(null);
     const dragOverRowIndex = ref<number | null>(null);
+
+    // Send to workspace modal
+    const showSendToWorkspace = ref(false);
+    const allWorkspaces = ref<Workspace[]>([]);
+    const loadingWorkspaces = ref(false);
+    const selectedTargetWorkspace = ref<string | null>(null);
+    const shapeExistsInTarget = ref(false);
+    const sendingShape = ref(false);
+
+    const otherWorkspaces = computed(() => {
+      return allWorkspaces.value.filter(ws => ws.id !== props.workspaceId);
+    });
 
     // LC-specific columns that are hidden when useLCColumns is false
     const LC_COLUMN_KEYS = ['resourceURI', 'lcDefaultLiteral', 'lcDefaultURI', 'lcDataTypeURI', 'lcRemark'];
@@ -304,7 +381,6 @@ export default defineComponent({
       loading.value = true;
       try {
         const loadedRows = await rowApi.list(props.workspaceId, props.shapeId);
-        console.log('Loaded rows:', JSON.stringify(loadedRows, null, 2));
 
         // Clean up any empty rows that shouldn't exist
         const dataColumnKeys = ['propertyId', 'propertyLabel', 'mandatory', 'repeatable',
@@ -1225,6 +1301,67 @@ export default defineComponent({
       }
     }
 
+    // Send to workspace functions
+    async function openSendToWorkspace() {
+      showSendToWorkspace.value = true;
+      selectedTargetWorkspace.value = null;
+      shapeExistsInTarget.value = false;
+      loadingWorkspaces.value = true;
+      try {
+        allWorkspaces.value = await workspaceApi.list();
+      } catch (e) {
+        console.error('Failed to load workspaces:', e);
+        alert('Failed to load workspaces');
+        showSendToWorkspace.value = false;
+      } finally {
+        loadingWorkspaces.value = false;
+      }
+    }
+
+    function closeSendToWorkspace() {
+      showSendToWorkspace.value = false;
+      selectedTargetWorkspace.value = null;
+      shapeExistsInTarget.value = false;
+    }
+
+    async function checkShapeExists() {
+      if (!selectedTargetWorkspace.value) {
+        shapeExistsInTarget.value = false;
+        return;
+      }
+      try {
+        shapeExistsInTarget.value = await shapeApi.existsInWorkspace(
+          props.workspaceId,
+          props.shapeId,
+          selectedTargetWorkspace.value
+        );
+      } catch (e) {
+        console.error('Failed to check if shape exists:', e);
+        shapeExistsInTarget.value = false;
+      }
+    }
+
+    async function doSendToWorkspace() {
+      if (!selectedTargetWorkspace.value) return;
+
+      sendingShape.value = true;
+      try {
+        const result = await shapeApi.copyToWorkspace(
+          props.workspaceId,
+          props.shapeId,
+          selectedTargetWorkspace.value
+        );
+        const targetWorkspace = otherWorkspaces.value.find(ws => ws.id === selectedTargetWorkspace.value);
+        const workspaceName = targetWorkspace?.name || 'the selected workspace';
+        alert(`Shape "${props.shapeId}" sent to ${workspaceName} successfully. ${result.rowsCopied} rows copied.${result.overwrote ? ' (overwrote existing shape)' : ''}`);
+        closeSendToWorkspace();
+      } catch (e) {
+        alert(`Failed to send shape: ${(e as Error).message}`);
+      } finally {
+        sendingShape.value = false;
+      }
+    }
+
     // Watch for shape changes
     watch(() => props.shapeId, () => {
       loadRows();
@@ -1295,7 +1432,18 @@ export default defineComponent({
       redo,
       startEditDescription,
       showErrorTooltip,
-      hideErrorTooltip
+      hideErrorTooltip,
+      // Send to workspace
+      showSendToWorkspace,
+      otherWorkspaces,
+      loadingWorkspaces,
+      selectedTargetWorkspace,
+      shapeExistsInTarget,
+      sendingShape,
+      openSendToWorkspace,
+      closeSendToWorkspace,
+      checkShapeExists,
+      doSendToWorkspace
     };
   }
 });
@@ -1385,6 +1533,22 @@ export default defineComponent({
 .save-indicator.unsaved {
   color: #e67e22;
   background: #fff3e0;
+}
+
+.locked-indicator {
+  display: inline-block;
+  background: #f39c12;
+  color: white;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+.shape-description-readonly {
+  color: #666;
+  font-size: 0.9rem;
+  font-style: italic;
 }
 
 .toolbar-right {
@@ -1642,5 +1806,139 @@ tr.row-selected td {
   border-width: 0 6px 6px 6px;
   border-style: solid;
   border-color: transparent transparent #c0392b transparent;
+}
+
+/* Dialog/Modal styles */
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.dialog {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  min-width: 400px;
+  max-width: 90%;
+}
+
+.dialog h2 {
+  margin: 0 0 0.5rem 0;
+  color: #2c3e50;
+}
+
+.dialog-description {
+  color: #666;
+  margin-bottom: 1rem;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+
+.btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background-color: #3498db;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: #2980b9;
+}
+
+.btn-primary:disabled {
+  background-color: #bdc3c7;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background-color: #ecf0f1;
+  color: #2c3e50;
+}
+
+.btn-secondary:hover {
+  background-color: #d5dbdb;
+}
+
+/* Send to workspace dialog specific styles */
+.send-to-workspace-dialog {
+  min-width: 450px;
+}
+
+.loading-workspaces,
+.no-workspaces {
+  padding: 1rem;
+  text-align: center;
+  color: #666;
+  background: #f8f9fa;
+  border-radius: 4px;
+}
+
+.workspace-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+}
+
+.workspace-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.15s;
+}
+
+.workspace-option:last-child {
+  border-bottom: none;
+}
+
+.workspace-option:hover {
+  background: #f8f9fa;
+}
+
+.workspace-option.selected {
+  background: #e3f2fd;
+}
+
+.workspace-option input[type="radio"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.workspace-name {
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.warning-message {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 4px;
+  color: #856404;
+  font-size: 0.9rem;
 }
 </style>

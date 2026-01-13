@@ -192,6 +192,26 @@ docker run -d --name dctap -p 3000:3000 -v dctap-data:/app/data dctap-dancer
 
 The `-v dctap-data:/app/data` flag persists the SQLite databases between container restarts.
 
+## Locked Workspaces
+
+Workspaces can be marked as read-only ("locked") to prevent modifications. Locked workspaces can still be viewed and duplicated, but cannot be edited or deleted. This is useful for public deployments where certain workspaces should remain stable as reference templates.
+
+Locked workspaces are configured via a local `locked-workspaces.json` file (not tracked in git). Use the CLI tool to manage them:
+
+```bash
+# List all workspaces with lock status
+npm run lock-workspace --workspace=backend list
+
+# Lock a workspace by name or ID
+npm run lock-workspace --workspace=backend lock "My Workspace"
+
+# Unlock a workspace
+npm run lock-workspace --workspace=backend unlock "My Workspace"
+
+# Show current locked-workspaces.json config
+npm run lock-workspace --workspace=backend show
+```
+
 ## Testing
 
 ```bash

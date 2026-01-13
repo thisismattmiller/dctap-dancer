@@ -10,7 +10,8 @@
     "start": "node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "lock-workspace": "tsx src/cli/lock-workspace.ts"
   },
   "dependencies": {
     "cors": "^2.8.5",

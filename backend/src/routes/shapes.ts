@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { shapeService, workspaceService } from '../services/database.js';
 import { AppError } from '../middleware/error-handler.js';
+import { checkWorkspaceLocked } from '../middleware/locked-workspace.js';
 import { CreateShapeRequest, UpdateShapeRequest, ApiResponse } from '../types/dctap.js';
 
 const router = Router({ mergeParams: true });
@@ -33,8 +34,8 @@ router.get('/:shapeId', (req: Request, res: Response, next: NextFunction) => {
   res.json(response);
 });
 
-// Create shape
-router.post('/', (req: Request, res: Response, next: NextFunction) => {
+// Create shape (blocked for locked workspaces)
+router.post('/', checkWorkspaceLocked, (req: Request, res: Response, next: NextFunction) => {
   const { shapeId, shapeLabel, resourceURI } = req.body as CreateShapeRequest;
   if (!shapeId || typeof shapeId !== 'string' || shapeId.trim().length === 0) {
     return next(new AppError(400, 'Shape ID is required', 'INVALID_SHAPE_ID'));
@@ -55,8 +56,8 @@ router.post('/', (req: Request, res: Response, next: NextFunction) => {
   }
 });
 
-// Update shape
-router.put('/:shapeId', (req: Request, res: Response, next: NextFunction) => {
+// Update shape (blocked for locked workspaces)
+router.put('/:shapeId', checkWorkspaceLocked, (req: Request, res: Response, next: NextFunction) => {
   const updates = req.body as UpdateShapeRequest;
 
   // Validate new shapeId if provided
@@ -90,8 +91,8 @@ router.put('/:shapeId', (req: Request, res: Response, next: NextFunction) => {
   res.json(response);
 });
 
-// Delete shape
-router.delete('/:shapeId', (req: Request, res: Response, next: NextFunction) => {
+// Delete shape (blocked for locked workspaces)
+router.delete('/:shapeId', checkWorkspaceLocked, (req: Request, res: Response, next: NextFunction) => {
   // Check for usages
   const usages = shapeService.getUsages(req.params.workspaceId, req.params.shapeId);
   if (usages.length > 0) {
@@ -117,6 +118,52 @@ router.get('/:shapeId/usages', (req: Request, res: Response, next: NextFunction)
   const usages = shapeService.getUsages(req.params.workspaceId, req.params.shapeId);
   const response: ApiResponse = { success: true, data: { usages } };
   res.json(response);
+});
+
+// Check if shape exists in target workspace (for warning before copy)
+router.get('/:shapeId/exists-in/:targetWorkspaceId', (req: Request, res: Response, next: NextFunction) => {
+  const shape = shapeService.get(req.params.workspaceId, req.params.shapeId);
+  if (!shape) {
+    return next(new AppError(404, 'Shape not found', 'SHAPE_NOT_FOUND'));
+  }
+
+  const targetWorkspace = workspaceService.get(req.params.targetWorkspaceId);
+  if (!targetWorkspace) {
+    return next(new AppError(404, 'Target workspace not found', 'WORKSPACE_NOT_FOUND'));
+  }
+
+  const existsInTarget = shapeService.get(req.params.targetWorkspaceId, req.params.shapeId) !== null;
+  const response: ApiResponse = { success: true, data: { exists: existsInTarget } };
+  res.json(response);
+});
+
+// Copy shape to another workspace
+router.post('/:shapeId/copy-to/:targetWorkspaceId', (req: Request, res: Response, next: NextFunction) => {
+  const shape = shapeService.get(req.params.workspaceId, req.params.shapeId);
+  if (!shape) {
+    return next(new AppError(404, 'Shape not found', 'SHAPE_NOT_FOUND'));
+  }
+
+  const targetWorkspace = workspaceService.get(req.params.targetWorkspaceId);
+  if (!targetWorkspace) {
+    return next(new AppError(404, 'Target workspace not found', 'WORKSPACE_NOT_FOUND'));
+  }
+
+  if (req.params.workspaceId === req.params.targetWorkspaceId) {
+    return next(new AppError(400, 'Cannot copy shape to the same workspace', 'SAME_WORKSPACE'));
+  }
+
+  try {
+    const result = shapeService.copyToWorkspace(
+      req.params.workspaceId,
+      req.params.shapeId,
+      req.params.targetWorkspaceId
+    );
+    const response: ApiResponse = { success: true, data: result };
+    res.json(response);
+  } catch (err) {
+    return next(new AppError(500, (err as Error).message, 'COPY_FAILED'));
+  }
 });
 
 export default router;

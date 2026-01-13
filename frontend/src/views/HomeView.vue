@@ -45,13 +45,17 @@
 
       <div v-else class="workspace-list">
         <div
-          v-for="workspace in workspaces"
+          v-for="workspace in sortedWorkspaces"
           :key="workspace.id"
           class="workspace-card"
         >
           <div class="workspace-info">
-            <h3 class="workspace-name">{{ workspace.name }}</h3>
+            <h3 class="workspace-name">
+              <span v-if="workspace.isLocked" class="lock-icon" title="This workspace is locked (read-only)">&#128274;</span>
+              {{ workspace.name }}
+            </h3>
             <p class="workspace-meta">
+              <span v-if="workspace.isLocked" class="locked-badge">Read-only</span>
               Created: {{ formatDate(workspace.createdAt) }}
               <span v-if="workspace.updatedAt !== workspace.createdAt">
                 | Modified: {{ formatDate(workspace.updatedAt) }}
@@ -65,7 +69,12 @@
             <button class="btn btn-secondary" @click="duplicateWorkspace(workspace)">
               Duplicate
             </button>
-            <button class="btn btn-danger" @click="confirmDelete(workspace)">
+            <button
+              class="btn btn-danger"
+              @click="confirmDelete(workspace)"
+              :disabled="workspace.isLocked"
+              :title="workspace.isLocked ? 'Cannot delete a locked workspace' : ''"
+            >
               Delete
             </button>
           </div>
@@ -206,7 +215,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, onMounted } from 'vue';
+import { defineComponent, ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { workspaceApi, importExportApi, marvaProfileApi } from '@/services/api';
 import type { Workspace } from '@/types';
@@ -244,6 +253,17 @@ export default defineComponent({
     const marvaProfiles = ref<unknown[]>([]);
     const marvaWorkspaceName = ref('');
     const marvaImporting = ref(false);
+
+    // Computed property to sort workspaces with locked ones at the top
+    const sortedWorkspaces = computed(() => {
+      return [...workspaces.value].sort((a, b) => {
+        // Locked workspaces come first
+        if (a.isLocked && !b.isLocked) return -1;
+        if (!a.isLocked && b.isLocked) return 1;
+        // Within same lock status, sort by name
+        return a.name.localeCompare(b.name);
+      });
+    });
 
     async function loadWorkspaces() {
       loading.value = true;
@@ -426,6 +446,7 @@ export default defineComponent({
 
     return {
       workspaces,
+      sortedWorkspaces,
       loading,
       error,
       fileInput,
@@ -537,8 +558,13 @@ export default defineComponent({
   color: white;
 }
 
-.btn-danger:hover {
+.btn-danger:hover:not(:disabled) {
   background-color: #c0392b;
+}
+
+.btn-danger:disabled {
+  background-color: #bdc3c7;
+  cursor: not-allowed;
 }
 
 .btn-link {
@@ -583,6 +609,26 @@ export default defineComponent({
   font-size: 1.1rem;
   color: #2c3e50;
   margin-bottom: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.lock-icon {
+  font-size: 0.9rem;
+  color: #7f8c8d;
+}
+
+.locked-badge {
+  display: inline-block;
+  background: #f39c12;
+  color: white;
+  font-size: 0.7rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  margin-right: 0.5rem;
+  font-weight: 600;
+  text-transform: uppercase;
 }
 
 .workspace-meta {

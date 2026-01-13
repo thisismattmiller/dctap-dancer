@@ -6,7 +6,11 @@
         <button class="btn btn-icon" @click="goHome" title="Back to Home">
           &larr;
         </button>
-        <h1>{{ workspace?.name || 'Loading...' }}</h1>
+        <h1>
+          <span v-if="workspace?.isLocked" class="lock-icon" title="This workspace is locked (read-only)">&#128274;</span>
+          {{ workspace?.name || 'Loading...' }}
+        </h1>
+        <span v-if="workspace?.isLocked" class="locked-badge">Read-only</span>
       </div>
       <div class="header-right">
         <button class="btn btn-secondary" @click="showOptionsDialog = true">
@@ -38,10 +42,20 @@
         </div>
         <div v-if="!sidebarCollapsed" class="sidebar-content">
           <div class="sidebar-buttons">
-            <button class="btn btn-primary btn-grow" @click="showNewShapeDialog = true">
+            <button
+              class="btn btn-primary btn-grow"
+              @click="showNewShapeDialog = true"
+              :disabled="workspace?.isLocked"
+              :title="workspace?.isLocked ? 'Cannot modify a locked workspace' : ''"
+            >
               + Shape
             </button>
-            <button class="btn btn-secondary btn-grow" @click="showNewFolderDialog = true">
+            <button
+              class="btn btn-secondary btn-grow"
+              @click="showNewFolderDialog = true"
+              :disabled="workspace?.isLocked"
+              :title="workspace?.isLocked ? 'Cannot modify a locked workspace' : ''"
+            >
               + Folder
             </button>
           </div>
@@ -67,7 +81,7 @@
               >
                 <span class="shape-name">{{ shape.shapeId }}</span>
                 <span v-if="shape.shapeLabel" class="shape-label">{{ shape.shapeLabel }}</span>
-                <div class="shape-actions">
+                <div v-if="!workspace?.isLocked" class="shape-actions">
                   <button class="btn btn-icon btn-small" @click.stop="editShape(shape)" title="Rename">
                     &#9998;
                   </button>
@@ -98,7 +112,7 @@
                 <span class="folder-icon">📁</span>
                 <span class="folder-name">{{ folder.name }}</span>
                 <span class="folder-count">({{ shapesByFolder.get(folder.id)?.length || 0 }})</span>
-                <div class="folder-actions">
+                <div v-if="!workspace?.isLocked" class="folder-actions">
                   <button class="btn btn-icon btn-small btn-danger" @click.stop="deleteFolder(folder)" title="Delete folder">
                     &times;
                   </button>
@@ -117,7 +131,7 @@
                 >
                   <span class="shape-name">{{ shape.shapeId }}</span>
                   <span v-if="shape.shapeLabel" class="shape-label">{{ shape.shapeLabel }}</span>
-                  <div class="shape-actions">
+                  <div v-if="!workspace?.isLocked" class="shape-actions">
                     <button class="btn btn-icon btn-small" @click.stop="editShape(shape)" title="Rename">
                       &#9998;
                     </button>
@@ -149,6 +163,7 @@
           :description="currentShape?.description || ''"
           :resource-u-r-i="currentShape?.resourceURI || ''"
           :use-l-c-columns="workspaceOptions.useLCColumns"
+          :is-locked="workspace?.isLocked || false"
           @shape-label-change="updateShapeLabel"
           @description-change="updateDescription"
           @resource-uri-change="updateResourceURI"
@@ -323,7 +338,8 @@
           <button
             class="btn btn-secondary btn-small-margin"
             @click="triggerStartingPointImport"
-            :disabled="importingStartingPoints"
+            :disabled="importingStartingPoints || workspace?.isLocked"
+            :title="workspace?.isLocked ? 'Cannot import to a locked workspace' : ''"
           >
             {{ importingStartingPoints ? 'Importing...' : 'Import Starting Point File' }}
           </button>
@@ -878,6 +894,25 @@ export default defineComponent({
 .header-left h1 {
   font-size: 1.25rem;
   color: #2c3e50;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.lock-icon {
+  font-size: 1rem;
+  color: #7f8c8d;
+}
+
+.locked-badge {
+  display: inline-block;
+  background: #f39c12;
+  color: white;
+  font-size: 0.7rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 3px;
+  font-weight: 600;
+  text-transform: uppercase;
 }
 
 .header-right {
@@ -1043,8 +1078,14 @@ export default defineComponent({
   color: #2c3e50;
 }
 
-.btn-secondary:hover {
+.btn-secondary:hover:not(:disabled) {
   background-color: #d5dbdb;
+}
+
+.btn-secondary:disabled {
+  background-color: #f5f5f5;
+  color: #bdc3c7;
+  cursor: not-allowed;
 }
 
 .btn-danger {

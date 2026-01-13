@@ -515,6 +515,69 @@ export const shapeService = {
     }
 
     return usages;
+  },
+
+  copyToWorkspace(sourceWorkspaceId: string, shapeId: string, targetWorkspaceId: string): { shape: Shape; rowsCopied: number; overwrote: boolean } {
+    // Get source shape
+    const sourceShape = this.get(sourceWorkspaceId, shapeId);
+    if (!sourceShape) {
+      throw new Error('Source shape not found');
+    }
+
+    // Check if target workspace exists
+    const targetWorkspace = workspaceService.get(targetWorkspaceId);
+    if (!targetWorkspace) {
+      throw new Error('Target workspace not found');
+    }
+
+    // Get source rows
+    const sourceRows = rowService.list(sourceWorkspaceId, shapeId);
+
+    // Check if shape already exists in target
+    const existingShape = this.get(targetWorkspaceId, shapeId);
+    const overwrote = existingShape !== null;
+
+    // If shape exists, delete it first (including its table)
+    if (existingShape) {
+      this.delete(targetWorkspaceId, shapeId);
+    }
+
+    // Create shape in target workspace
+    const newShape = this.create(
+      targetWorkspaceId,
+      sourceShape.shapeId,
+      sourceShape.shapeLabel || undefined,
+      sourceShape.resourceURI || undefined,
+      null, // Don't copy folder assignment
+      sourceShape.description || undefined
+    );
+
+    // Copy all rows
+    for (const row of sourceRows) {
+      rowService.create(targetWorkspaceId, shapeId, {
+        rowOrder: row.rowOrder,
+        propertyId: row.propertyId ?? undefined,
+        propertyLabel: row.propertyLabel ?? undefined,
+        mandatory: row.mandatory ?? undefined,
+        repeatable: row.repeatable ?? undefined,
+        valueNodeType: row.valueNodeType ?? undefined,
+        valueDataType: row.valueDataType ?? undefined,
+        valueShape: row.valueShape ?? undefined,
+        valueConstraint: row.valueConstraint ?? undefined,
+        valueConstraintType: row.valueConstraintType ?? undefined,
+        lcDefaultLiteral: row.lcDefaultLiteral ?? undefined,
+        lcDefaultURI: row.lcDefaultURI ?? undefined,
+        note: row.note ?? undefined,
+        lcDataTypeURI: row.lcDataTypeURI ?? undefined,
+        lcRemark: row.lcRemark ?? undefined
+      });
+    }
+
+    return {
+      shape: newShape,
+      rowsCopied: sourceRows.length,
+      overwrote
+    };
   }
 };
 

@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { folderService } from '../services/database.js';
 import { AppError } from '../middleware/error-handler.js';
+import { checkWorkspaceLocked } from '../middleware/locked-workspace.js';
 import { ApiResponse, CreateFolderRequest, UpdateFolderRequest } from '../types/dctap.js';
 
 const router = Router({ mergeParams: true });
@@ -28,8 +29,8 @@ router.get('/:folderId', (req: Request, res: Response, next: NextFunction) => {
   res.json(response);
 });
 
-// Create folder
-router.post('/', (req: Request, res: Response, next: NextFunction) => {
+// Create folder (blocked for locked workspaces)
+router.post('/', checkWorkspaceLocked, (req: Request, res: Response, next: NextFunction) => {
   const { name } = req.body as CreateFolderRequest;
   if (!name || !name.trim()) {
     return next(new AppError(400, 'Folder name is required', 'INVALID_NAME'));
@@ -40,8 +41,8 @@ router.post('/', (req: Request, res: Response, next: NextFunction) => {
   res.status(201).json(response);
 });
 
-// Update folder
-router.put('/:folderId', (req: Request, res: Response, next: NextFunction) => {
+// Update folder (blocked for locked workspaces)
+router.put('/:folderId', checkWorkspaceLocked, (req: Request, res: Response, next: NextFunction) => {
   const folderId = parseInt(req.params.folderId, 10);
   if (isNaN(folderId)) {
     return next(new AppError(400, 'Invalid folder ID', 'INVALID_FOLDER_ID'));
@@ -61,8 +62,8 @@ router.put('/:folderId', (req: Request, res: Response, next: NextFunction) => {
   res.json(response);
 });
 
-// Delete folder
-router.delete('/:folderId', (req: Request, res: Response, next: NextFunction) => {
+// Delete folder (blocked for locked workspaces)
+router.delete('/:folderId', checkWorkspaceLocked, (req: Request, res: Response, next: NextFunction) => {
   const folderId = parseInt(req.params.folderId, 10);
   if (isNaN(folderId)) {
     return next(new AppError(400, 'Invalid folder ID', 'INVALID_FOLDER_ID'));

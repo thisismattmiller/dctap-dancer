@@ -5,6 +5,7 @@ export interface Workspace {
   name: string;
   createdAt: number;
   updatedAt: number;
+  isLocked?: boolean;
 }
 
 export interface Folder {

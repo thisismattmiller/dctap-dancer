@@ -175,6 +175,24 @@ export const shapeApi = {
     } catch (error) {
       handleError(error as AxiosError<ApiResponse>);
     }
+  },
+
+  async existsInWorkspace(workspaceId: string, shapeId: string, targetWorkspaceId: string): Promise<boolean> {
+    try {
+      const response = await api.get<ApiResponse<{ exists: boolean }>>(`/workspaces/${workspaceId}/shapes/${encodeURIComponent(shapeId)}/exists-in/${targetWorkspaceId}`);
+      return response.data.data!.exists;
+    } catch (error) {
+      handleError(error as AxiosError<ApiResponse>);
+    }
+  },
+
+  async copyToWorkspace(workspaceId: string, shapeId: string, targetWorkspaceId: string): Promise<{ shape: Shape; rowsCopied: number; overwrote: boolean }> {
+    try {
+      const response = await api.post<ApiResponse<{ shape: Shape; rowsCopied: number; overwrote: boolean }>>(`/workspaces/${workspaceId}/shapes/${encodeURIComponent(shapeId)}/copy-to/${targetWorkspaceId}`);
+      return response.data.data!;
+    } catch (error) {
+      handleError(error as AxiosError<ApiResponse>);
+    }
   }
 };
 

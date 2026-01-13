@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { rowService, shapeService, workspaceService } from '../services/database.js';
 import { AppError } from '../middleware/error-handler.js';
+import { checkWorkspaceLocked } from '../middleware/locked-workspace.js';
 import { CreateRowRequest, UpdateRowRequest, BulkUpdateRowsRequest, ApiResponse } from '../types/dctap.js';
 
 const router = Router({ mergeParams: true });
@@ -45,16 +46,16 @@ router.get('/:rowId', (req: Request, res: Response, next: NextFunction) => {
   res.json(response);
 });
 
-// Create row
-router.post('/', (req: Request, res: Response) => {
+// Create row (blocked for locked workspaces)
+router.post('/', checkWorkspaceLocked, (req: Request, res: Response) => {
   const data = req.body as CreateRowRequest;
   const row = rowService.create(req.params.workspaceId, req.params.shapeId, data);
   const response: ApiResponse = { success: true, data: row };
   res.status(201).json(response);
 });
 
-// Update single row
-router.put('/:rowId', (req: Request, res: Response, next: NextFunction) => {
+// Update single row (blocked for locked workspaces)
+router.put('/:rowId', checkWorkspaceLocked, (req: Request, res: Response, next: NextFunction) => {
   const rowId = parseInt(req.params.rowId, 10);
   if (isNaN(rowId)) {
     return next(new AppError(400, 'Invalid row ID', 'INVALID_ROW_ID'));
@@ -70,8 +71,8 @@ router.put('/:rowId', (req: Request, res: Response, next: NextFunction) => {
   res.json(response);
 });
 
-// Bulk update rows (for paste operations, reordering)
-router.put('/', (req: Request, res: Response, next: NextFunction) => {
+// Bulk update rows (for paste operations, reordering) - blocked for locked workspaces
+router.put('/', checkWorkspaceLocked, (req: Request, res: Response, next: NextFunction) => {
   const { rows } = req.body as BulkUpdateRowsRequest;
   if (!Array.isArray(rows)) {
     return next(new AppError(400, 'Rows array is required', 'INVALID_ROWS'));
@@ -82,8 +83,8 @@ router.put('/', (req: Request, res: Response, next: NextFunction) => {
   res.json(response);
 });
 
-// Delete single row
-router.delete('/:rowId', (req: Request, res: Response, next: NextFunction) => {
+// Delete single row (blocked for locked workspaces)
+router.delete('/:rowId', checkWorkspaceLocked, (req: Request, res: Response, next: NextFunction) => {
   const rowId = parseInt(req.params.rowId, 10);
   if (isNaN(rowId)) {
     return next(new AppError(400, 'Invalid row ID', 'INVALID_ROW_ID'));
@@ -98,8 +99,8 @@ router.delete('/:rowId', (req: Request, res: Response, next: NextFunction) => {
   res.json(response);
 });
 
-// Bulk delete rows
-router.delete('/', (req: Request, res: Response, next: NextFunction) => {
+// Bulk delete rows (blocked for locked workspaces)
+router.delete('/', checkWorkspaceLocked, (req: Request, res: Response, next: NextFunction) => {
   const { rowIds } = req.body as { rowIds: number[] };
   if (!Array.isArray(rowIds) || rowIds.length === 0) {
     return next(new AppError(400, 'Row IDs array is required', 'INVALID_ROW_IDS'));
@@ -115,8 +116,8 @@ router.delete('/', (req: Request, res: Response, next: NextFunction) => {
   res.json(response);
 });
 
-// Reorder rows
-router.post('/reorder', (req: Request, res: Response, next: NextFunction) => {
+// Reorder rows (blocked for locked workspaces)
+router.post('/reorder', checkWorkspaceLocked, (req: Request, res: Response, next: NextFunction) => {
   const { rowIds } = req.body as { rowIds: number[] };
   if (!Array.isArray(rowIds) || rowIds.length === 0) {
     return next(new AppError(400, 'Row IDs array is required', 'INVALID_ROW_IDS'));

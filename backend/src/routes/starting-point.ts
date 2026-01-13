@@ -5,14 +5,15 @@ import {
   hasStartingPoints
 } from '../services/starting-point.js';
 import { AppError } from '../middleware/error-handler.js';
+import { checkWorkspaceLockedById } from '../middleware/locked-workspace.js';
 import { ApiResponse } from '../types/dctap.js';
 import { StartingPointFile } from '../types/starting-point.js';
 import { workspaceService } from '../services/database.js';
 
 const router = Router();
 
-// Import LC Starting Point JSON into a workspace
-router.post('/import/:workspaceId', (req: Request, res: Response, next: NextFunction) => {
+// Import LC Starting Point JSON into a workspace (blocked for locked workspaces)
+router.post('/import/:workspaceId', checkWorkspaceLockedById, (req: Request, res: Response, next: NextFunction) => {
   try {
     const workspace = workspaceService.get(req.params.workspaceId);
     if (!workspace) {

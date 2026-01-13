@@ -1,24 +1,34 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { workspaceService, optionsService } from '../services/database.js';
+import { lockedWorkspacesService } from '../services/locked-workspaces.js';
 import { AppError } from '../middleware/error-handler.js';
+import { checkWorkspaceDeleteLocked } from '../middleware/locked-workspace.js';
 import { CreateWorkspaceRequest, UpdateWorkspaceRequest, ApiResponse, WorkspaceOptions } from '../types/dctap.js';
 
 const router = Router();
 
-// List all workspaces
+// List all workspaces (includes locked status)
 router.get('/', (_req: Request, res: Response) => {
   const workspaces = workspaceService.list();
-  const response: ApiResponse = { success: true, data: workspaces };
+  const workspacesWithLockStatus = workspaces.map(ws => ({
+    ...ws,
+    isLocked: lockedWorkspacesService.isLocked(ws.id, ws.name)
+  }));
+  const response: ApiResponse = { success: true, data: workspacesWithLockStatus };
   res.json(response);
 });
 
-// Get workspace by ID
+// Get workspace by ID (includes locked status)
 router.get('/:id', (req: Request, res: Response, next: NextFunction) => {
   const workspace = workspaceService.get(req.params.id);
   if (!workspace) {
     return next(new AppError(404, 'Workspace not found', 'WORKSPACE_NOT_FOUND'));
   }
-  const response: ApiResponse = { success: true, data: workspace };
+  const workspaceWithLockStatus = {
+    ...workspace,
+    isLocked: lockedWorkspacesService.isLocked(workspace.id, workspace.name)
+  };
+  const response: ApiResponse = { success: true, data: workspaceWithLockStatus };
   res.json(response);
 });
 
@@ -43,8 +53,8 @@ router.post('/', (req: Request, res: Response, next: NextFunction) => {
   res.status(201).json(response);
 });
 
-// Update workspace
-router.put('/:id', (req: Request, res: Response, next: NextFunction) => {
+// Update workspace (blocked for locked workspaces)
+router.put('/:id', checkWorkspaceDeleteLocked, (req: Request, res: Response, next: NextFunction) => {
   const { name } = req.body as UpdateWorkspaceRequest;
   if (!name || typeof name !== 'string' || name.trim().length === 0) {
     return next(new AppError(400, 'Workspace name is required', 'INVALID_NAME'));
@@ -57,8 +67,8 @@ router.put('/:id', (req: Request, res: Response, next: NextFunction) => {
   res.json(response);
 });
 
-// Delete workspace
-router.delete('/:id', (req: Request, res: Response, next: NextFunction) => {
+// Delete workspace (blocked for locked workspaces)
+router.delete('/:id', checkWorkspaceDeleteLocked, (req: Request, res: Response, next: NextFunction) => {
   const deleted = workspaceService.delete(req.params.id);
   if (!deleted) {
     return next(new AppError(404, 'Workspace not found', 'WORKSPACE_NOT_FOUND'));
@@ -92,8 +102,8 @@ router.get('/:id/options', (req: Request, res: Response, next: NextFunction) => 
   res.json(response);
 });
 
-// Update workspace options
-router.put('/:id/options', (req: Request, res: Response, next: NextFunction) => {
+// Update workspace options (blocked for locked workspaces)
+router.put('/:id/options', checkWorkspaceDeleteLocked, (req: Request, res: Response, next: NextFunction) => {
   const workspace = workspaceService.get(req.params.id);
   if (!workspace) {
     return next(new AppError(404, 'Workspace not found', 'WORKSPACE_NOT_FOUND'));
