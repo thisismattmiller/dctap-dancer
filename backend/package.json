@@ -11,7 +11,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "lock-workspace": "tsx src/cli/lock-workspace.ts"
+    "lock-workspace": "node --import tsx/esm src/cli/lock-workspace.ts 2>/dev/null || node dist/cli/lock-workspace.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
